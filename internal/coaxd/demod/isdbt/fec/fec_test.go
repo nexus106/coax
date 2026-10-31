@@ -265,10 +265,13 @@ func BenchmarkViterbi(b *testing.B) {
 	for r := 0; r < 5; r++ {
 		b.Run(fmt.Sprint(r), func(b *testing.B) {
 			v, _ := NewViterbi(r)
-			data := make([]byte, 4096)
+			data := make([]byte, 4200)
 			rand.New(rand.NewSource(73)).Read(data)
+			// 4200 bytes is an integer number of all puncturing periods;
+			// a zero final byte returns the reference encoder to state zero.
+			data[len(data)-1] = 0
 			coded := encodeBits(data, r)
-			out := make([]byte, 0, 4100)
+			out := make([]byte, 0, 4204)
 			b.SetBytes(int64(len(data)))
 			b.ReportAllocs()
 			b.ResetTimer()

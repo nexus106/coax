@@ -86,32 +86,9 @@ var trellisOutputs = func() (out [128]byte) {
 
 func (v *Viterbi) step(dst []byte) []byte {
 	received := v.pair[0] | v.pair[1]<<1
-	var costs [4]int32
-	for i := range costs {
-		costs[i] = int32(bits.OnesCount8((byte(i) ^ received) & v.mask))
-	}
 	current := &v.metrics[v.steps&1]
 	next := &v.metrics[(v.steps+1)&1]
-	var decisions uint64
-	// Each butterfly has two predecessors and two successors. Both the new
-	// input and the oldest delay bit complement X and Y, so two costs serve
-	// all four branches. Normalization is only needed once per 32 steps.
-	for prev := 0; prev < 32; prev++ {
-		state := prev * 2
-		symbol := trellisOutputs[state]
-		c0, c1 := costs[symbol], costs[symbol^3]
-		a, b := current[prev], current[prev+32]
-		lo, hi := a+c0, b+c1
-		difference := hi - lo
-		choose := uint32(difference) >> 31
-		next[state] = min(lo, hi)
-		decisions |= uint64(choose) << state
-		lo, hi = a+c1, b+c0
-		difference = hi - lo
-		choose = uint32(difference) >> 31
-		next[state+1] = min(lo, hi)
-		decisions |= uint64(choose) << (state + 1)
-	}
+	decisions := updateMetrics(current, next, &branchCosts[(v.mask<<2)|received], int32(bits.OnesCount8(v.mask)))
 	v.history[v.steps%traceback] = decisions
 	v.steps++
 	if v.steps%outputBits != 0 {
@@ -142,4 +119,29 @@ func (v *Viterbi) step(dst []byte) []byte {
 		state = (state >> 1) | int(decision)<<5
 	}
 	return append(dst, block[:]...)
+}
+
+// All sixteen combinations of received X/Y and erasure mask are immutable.
+var branchCosts = func() (table [16][32]int32) {
+	for key := range table {
+		for p := range table[key] {
+			table[key][p] = int32(bits.OnesCount8((trellisOutputs[p*2] ^ byte(key&3)) & byte(key>>2)))
+		}
+	}
+	return
+}()
+
+func updateMetricsGo(current, next *[64]int32, costs *[32]int32, total int32) (decisions uint64) {
+	for prev := 0; prev < 32; prev++ {
+		state := prev * 2
+		c0, c1 := costs[prev], total-costs[prev]
+		a, b := current[prev], current[prev+32]
+		lo, hi := a+c0, b+c1
+		next[state] = min(lo, hi)
+		decisions |= uint64(uint32(hi-lo)>>31) << state
+		lo, hi = a+c1, b+c0
+		next[state+1] = min(lo, hi)
+		decisions |= uint64(uint32(hi-lo)>>31) << (state + 1)
+	}
+	return
 }
