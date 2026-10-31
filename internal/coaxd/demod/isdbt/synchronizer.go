@@ -68,6 +68,9 @@ func (s *Synchronizer) PushIQ(x []complex64, discontinuity bool, emit func(Symbo
 	if discontinuity {
 		s.Reset()
 	}
+	if s.err != nil {
+		return
+	}
 	s.buffer = append(s.buffer, x...)
 	if !s.acquired {
 		if len(s.buffer) < 131072 {
@@ -139,6 +142,9 @@ func (s *Synchronizer) PushIQ(x []complex64, discontinuity bool, emit func(Symbo
 		s.snapshot.Symbols++
 		s.snapshot.FrequencyOffset = s.offset * 8126984 / float64(s.n)
 		params, end := s.receiveTMCC()
+		if s.err != nil {
+			return
+		}
 		if s.frameIndex >= 0 {
 			s.frameIndex = (s.frameIndex + 1) % 204
 		}

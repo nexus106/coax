@@ -22,7 +22,16 @@ import (
 
 var ids = []usbio.ID{{Vendor: 0x1df7, Product: 0x2500}}
 var deliveries = []string{"ISDB-T"}
-var Backend = usbdev.Backend{Name: "msi2500", Aliases: []string{"dtv02-1t-u"}, IDs: ids, Description: "DTV02-1T-U (MSi2500 + MSi001 software ISDB-T)", Deliveries: deliveries, Supports: Supports, Layout: Layout, Open: open}
+var Backend = usbdev.Backend{
+	Name:        "msi2500",
+	Aliases:     []string{"dtv02-1t-u"},
+	IDs:         ids,
+	Description: "DTV02-1T-U (MSi2500 + MSi001 software ISDB-T)",
+	Deliveries:  deliveries,
+	Supports:    Supports,
+	Layout:      Layout,
+	Open:        open,
+}
 
 func Supports(system string) bool { return tuning.Normalize(system) == "ISDBT" }
 func gainSteps() []float64 {
