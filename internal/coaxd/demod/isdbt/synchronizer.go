@@ -3,7 +3,10 @@
 
 package isdbt
 
-import "math"
+import (
+	"errors"
+	"math"
+)
 
 // Symbol is valid only during the callback; Data is in logical segment order.
 type Symbol struct {
@@ -20,6 +23,8 @@ type SyncSnapshot struct {
 }
 
 type Synchronizer struct {
+	err                                      error
+	generation                               uint64
 	buffer                                   []complex64
 	total                                    int64
 	acquired                                 bool
@@ -41,7 +46,15 @@ func NewSynchronizer() *Synchronizer {
 	return &Synchronizer{buffer: make([]complex64, 0, 262144), frameIndex: -1}
 }
 func (s *Synchronizer) Snapshot() SyncSnapshot { return s.snapshot }
+
+// Generation changes whenever acquisition state is discarded.
+func (s *Synchronizer) Generation() uint64 { return s.generation }
+
+// Err returns an unsupported, parity-verified transmission error.
+func (s *Synchronizer) Err() error { return s.err }
 func (s *Synchronizer) Reset() {
+	s.err = nil
+	s.generation++
 	s.buffer = s.buffer[:0]
 	s.acquired = false
 	s.total = 0
@@ -303,6 +316,10 @@ func (s *Synchronizer) receiveTMCC() (*Parameters, bool) {
 	}
 	p, err := parseTMCC(frame, s.mode)
 	if err != nil {
+		if errors.Is(err, ErrUnsupported) {
+			s.err = err
+			s.snapshot.Parameters = nil
+		}
 		return nil, false
 	}
 	p.GuardDenominator = s.guard

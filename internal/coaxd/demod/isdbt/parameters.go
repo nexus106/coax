@@ -5,7 +5,13 @@
 // References: ARIB STD-B31, chapters 3.11 through 3.15. No GNU Radio code is used.
 package isdbt
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
+
+// ErrUnsupported reports a parity-verified transmission the decoder cannot decode.
+var ErrUnsupported = errors.New("unsupported ISDB-T transmission")
 
 type LayerParameters struct{ Constellation, Rate, Interleave, Segments int }
 type Parameters struct {
@@ -38,7 +44,7 @@ func parseTMCC(frame []byte, mode int) (Parameters, error) {
 		}
 	}
 	if bitNumber(frame[20:22]) != 0 {
-		return p, fmt.Errorf("TMCC is not terrestrial television")
+		return p, fmt.Errorf("%w: TMCC is not terrestrial television", ErrUnsupported)
 	}
 	p.PartialReception = frame[27] != 0
 	total := 0
@@ -49,7 +55,7 @@ func parseTMCC(frame []byte, mode int) (Parameters, error) {
 			continue
 		}
 		if mod < 1 || mod > 3 || rate > 4 || inter > 3 || segs < 1 || segs > 13 {
-			return p, fmt.Errorf("unsupported TMCC layer %d parameters", i)
+			return p, fmt.Errorf("%w: TMCC layer %d parameters", ErrUnsupported, i)
 		}
 		p.Layers[i] = LayerParameters{[]int{0, 4, 16, 64}[mod], rate, []int{0, 4, 8, 16}[inter] >> (mode - 1), segs}
 		total += segs

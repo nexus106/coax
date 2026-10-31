@@ -3,6 +3,7 @@
 package isdbt
 
 import (
+	"errors"
 	"math"
 	"math/cmplx"
 	"testing"
@@ -67,5 +68,49 @@ func TestSynchronizerFindsStandardTMCCWithFrequencyOffset(t *testing.T) {
 	sync.PushIQ(nil, true, nil)
 	if sync.Snapshot().Parameters != nil {
 		t.Fatal("sample loss retained stale parameters")
+	}
+}
+
+func TestSynchronizerReportsVerifiedUnsupportedTMCC(t *testing.T) {
+	frame := tmccFixture()
+	// DQPSK is a valid broadcast setting but is not implemented.
+	clear(frame[28:31])
+	clear(frame[122:])
+	parity := append([]byte(nil), frame[20:]...)
+	for i := 0; i < 102; i++ {
+		if parity[i] != 0 {
+			for _, power := range []int{82, 77, 76, 71, 67, 66, 56, 52, 48, 40, 36, 34, 24, 22, 18, 10, 4, 0} {
+				parity[i+82-power] ^= 1
+			}
+		}
+	}
+	copy(frame[122:], parity[102:])
+	feed := func(frame []byte) *Synchronizer {
+		s := NewSynchronizer()
+		s.mode = 3
+		s.guard = 8
+		copy(s.history[:], frame)
+		s.historyAt = 203
+		s.historyCount = 203
+		s.tmcc = []int{0}
+		s.previous = []complex64{1}
+		s.active = []complex64{1}
+		if frame[203] != 0 {
+			s.active[0] = -1
+		}
+		s.receiveTMCC()
+		return s
+	}
+	s := feed(frame)
+	if !errors.Is(s.Err(), ErrUnsupported) {
+		t.Fatalf("missing unsupported error: %v", s.Err())
+	}
+	s.Reset()
+	if s.Err() != nil {
+		t.Fatal("reset retained error")
+	}
+	frame[50] ^= 1
+	if err := feed(frame).Err(); err != nil {
+		t.Fatalf("unverified TMCC produced fatal error: %v", err)
 	}
 }
