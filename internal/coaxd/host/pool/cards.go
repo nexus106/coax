@@ -41,9 +41,8 @@ func (c cardSource) Open(backend, selector string) (usbcard.Borrow, error) {
 	if err != nil {
 		return usbcard.Borrow{}, err
 	}
-	key := Key{Backend: backend, Selector: selector}
 	for _, one := range catalog {
-		if one.key != key {
+		if one.detected.Backend != backend || one.detected.Selector != selector {
 			continue
 		}
 		held, err := c.pool.board(one)
