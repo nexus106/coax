@@ -14,6 +14,8 @@ import (
 
 // TestHardwareCapture is opt-in: MSI2500_CAPTURE names an untracked cs16 output.
 // It requires exclusive use of a connected 1df7:2500 device for ten seconds.
+// MSI2500_CAPTURE_SECOND optionally records ten more seconds after a fresh
+// Close/Open/New, for RF waveform comparison rather than read-count checks.
 func TestHardwareCapture(t *testing.T) {
 	path := os.Getenv("MSI2500_CAPTURE")
 	if path == "" {
@@ -42,7 +44,7 @@ func TestHardwareCapture(t *testing.T) {
 		t.Fatal(err)
 	}
 	start := time.Now()
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
 	defer cancel()
 	const target = SampleRate * 10
 	samples, loss := 0, 0
@@ -102,7 +104,39 @@ func TestHardwareCapture(t *testing.T) {
 	if e = b2.Start(); e != nil {
 		t.Fatal(e)
 	}
-	if n, _, e := b2.ReadIQ(ctx, iq[:]); e != nil || n == 0 {
+	if secondPath := os.Getenv("MSI2500_CAPTURE_SECOND"); secondPath != "" {
+		f2, e := os.Create(secondPath)
+		if e != nil {
+			t.Fatal(e)
+		}
+		defer f2.Close()
+		w2 := bufio.NewWriterSize(f2, 1<<20)
+		total, gaps := 0, 0
+		var pwr float64
+		start2 := time.Now()
+		for total < target {
+			n, gap, e := b2.ReadIQ(ctx, iq[:])
+			if e != nil {
+				t.Fatal(e)
+			}
+			if gap {
+				gaps++
+			}
+			for j, v := range iq[:n] {
+				binary.LittleEndian.PutUint16(raw[j*4:], uint16(int16(real(v)*32768)))
+				binary.LittleEndian.PutUint16(raw[j*4+2:], uint16(int16(imag(v)*32768)))
+				pwr += float64(real(v)*real(v) + imag(v)*imag(v))
+			}
+			if _, e = w2.Write(raw[:n*4]); e != nil {
+				t.Fatal(e)
+			}
+			total += n
+		}
+		if e = w2.Flush(); e != nil {
+			t.Fatal(e)
+		}
+		t.Logf("second path=%s samples=%d gaps=%d wall=%s meanPower=%g", secondPath, total, gaps, time.Since(start2), pwr/float64(total))
+	} else if n, _, e := b2.ReadIQ(ctx, iq[:]); e != nil || n == 0 {
 		t.Fatalf("fresh reopen n=%d err=%v", n, e)
 	}
 
