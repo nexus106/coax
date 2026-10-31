@@ -39,12 +39,26 @@ func gfDiv(a, b byte) byte {
 	}
 	return gfExp[(int(gfLog[a])-int(gfLog[b])+255)%255]
 }
+
+// Each syndrome uses a fixed root. A 4 KiB multiplication table removes
+// logarithm lookups from the common error-free packet path.
+var syndromeProducts = func() (table [16][256]byte) {
+	for i := range table {
+		for x := range table[i] {
+			table[i][x] = gfMul(byte(x), gfExp[i])
+		}
+	}
+	return
+}()
+
 func syndromes(word []byte) (s [16]byte) {
 	for i := range s {
-		root := gfExp[i]
+		products := &syndromeProducts[i]
+		v := byte(0)
 		for _, c := range word {
-			s[i] = gfMul(s[i], root) ^ c
+			v = products[v] ^ c
 		}
+		s[i] = v
 	}
 	return
 }

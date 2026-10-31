@@ -316,3 +316,38 @@ func BenchmarkByteDeinterleaver(b *testing.B) {
 		out = d.Push(out[:0], in)
 	}
 }
+
+// Compare the optimized recurrence against polynomial multiplication directly.
+func TestSyndromesPolynomialOracle(t *testing.T) {
+	mul := func(a, b byte) byte {
+		var v byte
+		for b != 0 {
+			if b&1 != 0 {
+				v ^= a
+			}
+			high := a & 128
+			a <<= 1
+			if high != 0 {
+				a ^= 0x1d
+			}
+			b >>= 1
+		}
+		return v
+	}
+	r := rand.New(rand.NewSource(73))
+	for trial := 0; trial < 300; trial++ {
+		word := make([]byte, 204)
+		r.Read(word)
+		var want [16]byte
+		root := byte(1)
+		for i := range want {
+			for _, c := range word {
+				want[i] = mul(want[i], root) ^ c
+			}
+			root = mul(root, 2)
+		}
+		if got := syndromes(word); got != want {
+			t.Fatalf("trial%d: got%x want%x", trial, got, want)
+		}
+	}
+}
