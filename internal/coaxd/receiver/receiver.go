@@ -6,6 +6,7 @@ package receiver
 import (
 	"context"
 	"errors"
+	"github.com/Till0196/coax/internal/coaxd/device"
 )
 
 var ErrWouldBlock = errors.New("receiver would block")
@@ -15,7 +16,7 @@ var ErrWouldBlock = errors.New("receiver would block")
 // different things: the hardware is not broken and nothing is wrong with the
 // channel, the two simply do not go together. A scan of a whole band against a
 // tuner that covers part of it would otherwise fill its report with errors.
-var ErrOutOfRange = errors.New("frequency is outside the tuner's range")
+var ErrOutOfRange = device.ErrOutOfRange
 
 // Measurement is a signal reading a backend may not be able to make. Zero is
 // a legitimate reading, so whether one was taken is carried separately.

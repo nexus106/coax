@@ -41,6 +41,7 @@ import (
 	"github.com/Till0196/coax/internal/coaxd/usb/board/fsusb2"
 	"github.com/Till0196/coax/internal/coaxd/usb/board/fsusb2i"
 	"github.com/Till0196/coax/internal/coaxd/usb/board/isdb2056"
+	"github.com/Till0196/coax/internal/coaxd/usb/board/msi2500"
 	"github.com/Till0196/coax/internal/coaxd/usb/board/px3"
 	"github.com/Till0196/coax/internal/coaxd/usb/board/px4"
 	"github.com/Till0196/coax/internal/coaxd/usb/board/pxmlt"
@@ -57,6 +58,7 @@ import (
 
 // backends lists every supported board. Add one line per new board package.
 var backends = []usbdev.Backend{
+	msi2500.Backend,
 	fsusb2.Backend,
 	fsusb2i.Backend,
 	isdb2056.Backend,

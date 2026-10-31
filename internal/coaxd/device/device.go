@@ -28,6 +28,9 @@ var ErrClosed = errors.New("the stream has been closed")
 // answers with it, and the message is shown to whoever asked.
 var ErrTunerBusy = errors.New("tuner is already in use")
 
+// ErrOutOfRange reports a frequency outside the tuner range.
+var ErrOutOfRange = errors.New("frequency is outside the tuner's range")
+
 // Options selects and configures a board.
 type Options struct {
 	// Selector picks between identical boards: empty for the first match, a

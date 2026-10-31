@@ -13,7 +13,7 @@ import (
 func TestLookupAcceptsAliasesAndPrefix(t *testing.T) {
 	t.Parallel()
 	for _, name := range []string{
-		"t230", "usb-t230", " T230 ", "us3pout", "usb-us3pout",
+		"msi2500", "dtv02-1t-u", "usb-msi2500", "t230", "usb-t230", " T230 ", "us3pout", "usb-us3pout",
 		"px4", "pxw3u4", "usb-pxq3pe4", "pxmlt", "isdb6014",
 		"isdb2056", "m1ur", "s1ur", "isdbt2071", "s270", "pxs1ud",
 	} {
