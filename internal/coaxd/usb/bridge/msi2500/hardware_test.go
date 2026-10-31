@@ -82,4 +82,28 @@ func TestHardwareCapture(t *testing.T) {
 	if n, _, err := b.ReadIQ(ctx, iq[:]); err != nil || n == 0 {
 		t.Fatalf("restart n=%d err=%v", n, err)
 	}
+	if err = b.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// A fresh Bridge must reset/reacquire again after the previous session.
+	tr2, e := usbio.Open("", []usbio.ID{{Vendor: 0x1df7, Product: 0x2500}})
+	if e != nil {
+		t.Fatal(e)
+	}
+	b2, e := New(tr2)
+	if e != nil {
+		tr2.Close()
+		t.Fatal(e)
+	}
+	defer b2.Close()
+	if e = b2.Tune(539142857, 15); e != nil {
+		t.Fatal(e)
+	}
+	if e = b2.Start(); e != nil {
+		t.Fatal(e)
+	}
+	if n, _, e := b2.ReadIQ(ctx, iq[:]); e != nil || n == 0 {
+		t.Fatalf("fresh reopen n=%d err=%v", n, e)
+	}
+
 }

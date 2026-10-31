@@ -5,6 +5,7 @@ package msi2500
 import (
 	"errors"
 	"fmt"
+	"runtime"
 	"time"
 
 	"github.com/Till0196/coax/pkg/usbio"
@@ -50,6 +51,13 @@ func resetTransport(t *usbio.Transport) (*usbio.Transport, error) {
 		location, e := resetLocation(list, id, port, serial)
 		if e != nil {
 			last = e
+			continue
+		}
+		// Firmware reset acknowledges before its USB disconnect is published.
+		// Reopening the old Darwin registry entry can keep that stale device
+		// alive with no interface, so wait for its replacement at the same port.
+		if runtime.GOOS == "darwin" && location == t.Name() {
+			last = errors.New("waiting for firmware-reset USB re-enumeration")
 			continue
 		}
 		reopened, e := usbio.Open(location, []usbio.ID{id})
