@@ -1,3 +1,6 @@
+// Copyright 2026 nexus106
+// SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+
 //go:build !arm64 || purego
 
 package fec
