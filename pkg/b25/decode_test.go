@@ -233,3 +233,105 @@ func TestMalformedAdaptationFailsWithoutChangingPacket(t *testing.T) {
 		}
 	}
 }
+
+func testPMT(program, ecm, es int, version byte) []byte {
+	return section([]byte{2, 0xb0, 0, byte(program >> 8), byte(program), 0xc1 | version<<1, 0, 0, byte(0xe0 | es>>8), byte(es), 0xf0, 6, 9, 4, 0, 5, byte(0xe0 | ecm>>8), byte(ecm), 0x1b, byte(0xe0 | es>>8), byte(es), 0xf0, 0})
+}
+func testECM(pid int, cc byte) []byte {
+	return packet(pid, append([]byte{0}, section([]byte{0x82, 0x30, 0, cc})...), true, cc)
+}
+func TestRetiredECMPIDCanBecomeVideo(t *testing.T) {
+	src := tables()
+	src = append(src, testECM(288, 0)...)
+	src = append(src, packet(256, append([]byte{0}, testPMT(1, 289, 288, 1)...), true, 1)...)
+	src = append(src, testECM(289, 0)...)
+	p := packet(288, bytes.Repeat([]byte{0x31}, 184), false, 0)
+	want := append(bytes.Clone(src), p...)
+	newMulti2([32]byte{}, [8]byte{}, [8]byte{}).encrypt(p[4:])
+	p[3] |= 0x80
+	src = append(src, p...)
+	var dst bytes.Buffer
+	if err := Decode(context.Background(), &dst, bytes.NewReader(src), &testCard{}); err != nil {
+		t.Fatalf("valid reassigned video rejected: %v", err)
+	}
+	if !bytes.Equal(dst.Bytes(), want) {
+		t.Fatal("reassigned video decoded incorrectly")
+	}
+}
+func TestRetiredECMTrafficIsNotSentToCard(t *testing.T) {
+	for _, change := range []string{"PAT", "PMT"} {
+		t.Run(change, func(t *testing.T) {
+			src := tables()
+			src = append(src, testECM(288, 0)...)
+			if change == "PAT" {
+				pat := section([]byte{0, 0xb0, 0, 0, 1, 0xc3, 0, 0})
+				src = append(src, packet(0, append([]byte{0}, pat...), true, 1)...)
+			} else {
+				src = append(src, packet(256, append([]byte{0}, testPMT(1, 289, 257, 1)...), true, 1)...)
+			}
+			src = append(src, testECM(288, 1)...)
+			c := &testCard{}
+			var dst bytes.Buffer
+			if err := Decode(context.Background(), &dst, bytes.NewReader(src), c); err != nil {
+				t.Fatal(err)
+			}
+			if c.calls != 1 {
+				t.Fatalf("obsolete ECM caused %d card calls", c.calls)
+			}
+			if !bytes.Equal(dst.Bytes(), src) {
+				t.Fatal("metadata stream changed")
+			}
+		})
+	}
+}
+func TestSharedECMRetiredOnlyAfterLastReferenceAndReuseNeedsNewKeys(t *testing.T) {
+	c := &testCard{}
+	d := decoder{card: c, sections: map[uint16]*assembler{0: newAssembler()}, pmts: map[uint16]bool{}, programs: map[uint16]map[uint16]uint16{}, pids: map[uint16]uint16{}, ecms: map[uint16]*ecmKeys{}}
+	feed := func(p []byte) {
+		t.Helper()
+		if err := d.inspect(context.Background(), p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pat := section([]byte{0, 0xb0, 0, 0, 1, 0xc1, 0, 0, 0, 1, 0xe1, 0, 0, 2, 0xe2, 0})
+	feed(packet(0, append([]byte{0}, pat...), true, 0))
+	feed(packet(256, append([]byte{0}, testPMT(1, 288, 257, 0)...), true, 0))
+	feed(packet(512, append([]byte{0}, testPMT(2, 288, 513, 0)...), true, 0))
+	feed(testECM(288, 0))
+	sharedAssembler := d.sections[288]
+	sharedKeys := d.ecms[288]
+	if sharedKeys == nil {
+		t.Fatal("shared ECM did not produce control words")
+	}
+	feed(packet(256, append([]byte{0}, testPMT(1, 289, 257, 1)...), true, 1))
+	if d.sections[288] != sharedAssembler || d.ecms[288] != sharedKeys {
+		t.Fatal("active shared ECM was retired")
+	}
+	p := packet(513, make([]byte, 184), false, 0)
+	p[3] |= 0x80
+	if ready, err := d.descramble(p); err != nil || !ready {
+		t.Fatalf("remaining shared service lost keys: %v", err)
+	}
+	feed(packet(512, append([]byte{0}, testPMT(2, 290, 513, 1)...), true, 1))
+	if d.sections[288] != nil || d.ecms[288] != nil {
+		t.Fatal("last unreferenced ECM remained active")
+	}
+	for _, cipher := range []*multi2{sharedKeys.odd, sharedKeys.even} {
+		if cipher.work != [8]uint32{} {
+			t.Fatal("retired expanded keys were retained")
+		}
+	}
+	feed(packet(256, append([]byte{0}, testPMT(1, 288, 257, 2)...), true, 2))
+	p = packet(257, make([]byte, 184), false, 0)
+	p[3] |= 0x80
+	if ready, err := d.descramble(p); err != nil || ready {
+		t.Fatalf("reused ECM accepted stale control words: ready=%v err=%v", ready, err)
+	}
+	feed(testECM(288, 0))
+	if c.calls != 2 {
+		t.Fatalf("reused ECM did not request current keys: %d", c.calls)
+	}
+	if ready, err := d.descramble(p); err != nil || !ready {
+		t.Fatalf("reused ECM unavailable after new response: %v", err)
+	}
+}

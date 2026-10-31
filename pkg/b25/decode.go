@@ -26,8 +26,7 @@ func Decode(ctx context.Context, dst io.Writer, src io.Reader, card Card) error 
 		clear(d.system[:])
 		clear(d.iv[:])
 		for _, k := range d.ecms {
-			clear(k.odd.work[:])
-			clear(k.even.work[:])
+			k.clear()
 		}
 	}()
 	type queued struct {
@@ -269,9 +268,6 @@ func (d *decoder) section(ctx context.Context, pid uint16, s []byte) error {
 			}
 			if ok {
 				entries[es] = ecm
-				if d.sections[ecm] == nil {
-					d.sections[ecm] = newAssembler()
-				}
 			}
 			off += 5 + dn
 		}
@@ -295,8 +291,14 @@ func (d *decoder) section(ctx context.Context, pid uint16, s []byte) error {
 	}
 	keys, err := d.card.ProcessECM(ctx, s[offset:len(s)-4])
 	if err != nil {
+		if old != nil {
+			old.clear()
+		}
 		delete(d.ecms, pid)
 		return err
+	}
+	if old != nil {
+		old.clear()
 	}
 	d.generation++
 	d.ecms[pid] = &ecmKeys{odd: newMulti2(d.system, keys.Odd, d.iv), even: newMulti2(d.system, keys.Even, d.iv), last: bytes.Clone(s)}
@@ -308,9 +310,35 @@ func (d *decoder) section(ctx context.Context, pid uint16, s []byte) error {
 func (d *decoder) rebuildPIDs() {
 	d.generation++
 	clear(d.pids)
+	activeECMs := map[uint16]bool{}
 	for _, entries := range d.programs {
 		for pid, ecm := range entries {
 			d.pids[pid] = ecm
+			activeECMs[ecm] = true
 		}
 	}
+	// ECM PIDs belong to the current program maps, not the history of PMTs.
+	// Preserve shared ECMs until their final service reference is removed.
+	for pid := range d.sections {
+		if pid != 0 && !d.pmts[pid] && !activeECMs[pid] {
+			delete(d.sections, pid)
+		}
+	}
+	for pid, keys := range d.ecms {
+		if !activeECMs[pid] {
+			keys.clear()
+			delete(d.ecms, pid)
+		}
+	}
+	for pid := range activeECMs {
+		if d.sections[pid] == nil {
+			d.sections[pid] = newAssembler()
+		}
+	}
+}
+
+func (k *ecmKeys) clear() {
+	clear(k.odd.work[:])
+	clear(k.even.work[:])
+	clear(k.last)
 }
