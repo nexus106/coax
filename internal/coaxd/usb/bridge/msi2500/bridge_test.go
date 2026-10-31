@@ -143,3 +143,105 @@ func TestReadPreservesErrorAlongsideData(t *testing.T) {
 		t.Fatal(e)
 	}
 }
+
+type chunkReader struct {
+	chunks [][]byte
+	reads  int
+}
+
+func (r *chunkReader) Start() error { return nil }
+func (r *chunkReader) Stop() error  { return nil }
+func (r *chunkReader) Read(dst []byte, timeout uint32) (int, error) {
+	r.reads++
+	if len(r.chunks) == 0 {
+		return 0, usbio.ErrGone
+	}
+	b := r.chunks[0]
+	r.chunks = r.chunks[1:]
+	return copy(dst, b), nil
+}
+func batchBridge(t *testing.T, r usbio.EndpointReader) *Bridge {
+	t.Helper()
+	b, e := newBridge(new(fakeDevice), r)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = b.Tune(539142857, 15); e != nil {
+		t.Fatal(e)
+	}
+	if e = b.Start(); e != nil {
+		t.Fatal(e)
+	}
+	return b
+}
+func frames(counters ...uint32) []byte {
+	var b []byte
+	for _, c := range counters {
+		b = append(b, packet(c)...)
+	}
+	return b
+}
+func TestReadIQBatchesOneUSBTransfer(t *testing.T) {
+	r := &chunkReader{chunks: [][]byte{frames(0, 336, 672), frames(1008)}}
+	b := batchBridge(t, r)
+	dst := make([]complex64, 32768)
+	n, loss, e := b.ReadIQ(context.Background(), dst)
+	if e != nil || loss || n != 1008 || r.reads != 1 {
+		t.Fatalf("n=%d loss=%v err=%v USBreads=%d", n, loss, e, r.reads)
+	}
+	for _, v := range dst[:n] {
+		if v != complex(float32(2047)/2048, -1) {
+			t.Fatal(v)
+		}
+	}
+}
+func TestReadIQBatchStopsBeforeGap(t *testing.T) {
+	r := &chunkReader{chunks: [][]byte{frames(0, 336, 1008, 1344)}}
+	b := batchBridge(t, r)
+	dst := make([]complex64, 32768)
+	for i, wantLoss := range []bool{false, true} {
+		n, loss, e := b.ReadIQ(context.Background(), dst)
+		if e != nil || loss != wantLoss || n != 672 {
+			t.Fatalf("part%d n=%d loss=%v err=%v", i, n, loss, e)
+		}
+	}
+	if r.reads != 1 {
+		t.Fatal(r.reads)
+	}
+}
+func TestReadIQBatchCounterWrapAndFragmentedHeader(t *testing.T) {
+	raw := frames(0xffffff00, 80, 416)
+	r := &chunkReader{chunks: [][]byte{raw[:13], raw[13:2061], raw[2061:]}}
+	b := batchBridge(t, r)
+	dst := make([]complex64, 32768)
+	n, loss, e := b.ReadIQ(context.Background(), dst)
+	if e != nil || loss || n != 672 || r.reads != 2 {
+		t.Fatalf("n=%d loss=%v err=%v reads=%d", n, loss, e, r.reads)
+	}
+	n, loss, e = b.ReadIQ(context.Background(), dst)
+	if e != nil || loss || n != 336 || r.reads != 3 {
+		t.Fatalf("tail n=%d loss=%v err=%v reads=%d", n, loss, e, r.reads)
+	}
+}
+func TestReadIQBatchSmallDestinationAndCancel(t *testing.T) {
+	r := &chunkReader{chunks: [][]byte{frames(0, 336, 1008)}}
+	b := batchBridge(t, r)
+	dst := make([]complex64, 500)
+	n, loss, e := b.ReadIQ(context.Background(), dst)
+	if n != 500 || loss || e != nil {
+		t.Fatalf("%d %v %v", n, loss, e)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if n, _, e = b.ReadIQ(ctx, dst); n != 0 || !errors.Is(e, context.Canceled) {
+		t.Fatalf("canceled n=%d err=%v", n, e)
+	}
+	n, loss, e = b.ReadIQ(context.Background(), dst)
+	if n != 172 || loss || e != nil {
+		t.Fatalf("beforegap %d %v %v", n, loss, e)
+	}
+	n, loss, e = b.ReadIQ(context.Background(), dst)
+	if n != 336 || !loss || e != nil {
+		t.Fatalf("gap %d %v %v", n, loss, e)
+	}
+}

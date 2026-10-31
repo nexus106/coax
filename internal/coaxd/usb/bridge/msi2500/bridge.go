@@ -199,6 +199,8 @@ func (b *Bridge) Start() error {
 
 // ReadIQ returns normalized IQ. A true discontinuity starts a new contiguous
 // interval at dst[0]. It never combines samples across a missing frame.
+// A large destination receives all complete contiguous frames buffered by the
+// current USB transfer (up to21,504 samples for a64KiB transfer).
 // One caller may read; Stop/Close may run concurrently. Cancellation is checked
 // between bounded 50 ms USB polls and returns ctx.Err().
 func (b *Bridge) ReadIQ(ctx context.Context, dst []complex64) (int, bool, error) {
