@@ -15,7 +15,8 @@ type layerDecoder struct {
 	timed                                []complex64
 	hard, unbit, decoded, unbyte, packet []byte
 	position                             int
-	prbs                                 uint16
+	energy                               []byte
+	energyAt                             int
 	packets, failures                    uint64
 	consecutiveFailures                  int
 }
@@ -26,7 +27,18 @@ func newLayerDecoder(p LayerParameters, mode int) *layerDecoder {
 	v, _ := fec.NewViterbi(p.Rate)
 	num := []int{1, 2, 3, 5, 7}[p.Rate]
 	den := []int{2, 3, 4, 6, 8}[p.Rate]
-	return &layerDecoder{p: p, n: n, frameBytes: 204 * n * b * num / den / 8, time: newTimeDeinterleaver(n, p.Interleave), bit: newBitDeinterleaver(b), v: v, bytes: fec.NewByteDeinterleaver(), timed: make([]complex64, n), prbs: 0x00a9}
+	l := &layerDecoder{p: p, n: n, frameBytes: 204 * n * b * num / den / 8, time: newTimeDeinterleaver(n, p.Interleave), bit: newBitDeinterleaver(b), v: v, bytes: fec.NewByteDeinterleaver(), timed: make([]complex64, n)}
+	// The PRBS restarts each frame, so compute its exact byte masks once.
+	// Advance across sync bytes too, while retaining those bytes unchanged.
+	l.energy = make([]byte, l.frameBytes)
+	register := uint16(0xa9)
+	for i := range l.energy {
+		mask := nextEnergyByte(&register)
+		if i%204 != 203 {
+			l.energy[i] = mask
+		}
+	}
+	return l
 }
 func (l *layerDecoder) push(dst []byte, src []complex64) []byte {
 	l.time.push(l.timed, src)
@@ -35,12 +47,10 @@ func (l *layerDecoder) push(dst []byte, src []complex64) []byte {
 	l.decoded = l.v.Decode(l.decoded[:0], l.unbit)
 	l.unbyte = l.bytes.Push(l.unbyte[:0], l.decoded)
 	for _, b := range l.unbyte {
-		if l.position%l.frameBytes == 0 {
-			l.prbs = 0x00a9
-		}
-		mask := nextEnergyByte(&l.prbs)
-		if l.position%204 != 203 {
-			b ^= mask
+		b ^= l.energy[l.energyAt]
+		l.energyAt++
+		if l.energyAt == len(l.energy) {
+			l.energyAt = 0
 		}
 		l.packet = append(l.packet, b)
 		l.position++

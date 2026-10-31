@@ -109,3 +109,62 @@ func TestDecoderLossReset(t *testing.T) {
 		t.Fatal("discontinuity retained lock")
 	}
 }
+
+func TestDecoderInternalLossResetsLayers(t *testing.T) {
+	d, _ := New(Config{})
+	p := Parameters{Mode: 3, GuardDenominator: 8, PartialReception: true, Layers: [3]LayerParameters{{4, 1, 4, 1}, {64, 2, 2, 12}}}
+	d.p = &p
+	d.started = true
+	d.layers[0] = &layerDecoder{packets: 5}
+	d.layers[1] = &layerDecoder{packets: 5}
+	if !d.Locked() {
+		t.Fatal("fixture mustlock")
+	}
+	// Synchronizer Reset is the exact internal coherence/pilot failure path.
+	d.sync.Reset()
+	d.PushIQ(nil, false)
+	if d.Locked() || d.p != nil || d.started || d.layers[0] != nil {
+		t.Fatal("internal synchronization loss retained transport history")
+	}
+}
+func TestDecoderSameParametersReacquiresFreshLayers(t *testing.T) {
+	d, _ := New(Config{})
+	p := Parameters{Mode: 3, GuardDenominator: 8, PartialReception: true, Layers: [3]LayerParameters{{4, 1, 4, 1}, {64, 2, 2, 12}}}
+	if _, e := d.consumeSymbol(nil, Symbol{Parameters: &p, FrameSymbol: 203}); e != nil {
+		t.Fatal(e)
+	}
+	old := d.layers[0]
+	old.packets = 20
+	d.layers[1].packets = 20
+	d.started = true
+	d.sync.Reset()
+	// This symbol represents fresh verification after a reset and reacquisition
+	// within one PushIQ chunk, before its final generation check can run.
+	if _, e := d.consumeSymbol(nil, Symbol{Parameters: &p, FrameSymbol: 203}); e != nil {
+		t.Fatal(e)
+	}
+	if d.layers[0] == old || d.layers[0].packets != 0 || d.started || d.Locked() {
+		t.Fatal("same parameters reused pre-loss FEC/TS history")
+	}
+	if _, e := d.consumeSymbol(nil, Symbol{Data: make([]complex64, 13*384), FrameSymbol: 0}); e != nil {
+		t.Fatal(e)
+	}
+	if !d.started {
+		t.Fatal("fresh frame did not restart layer processing")
+	}
+}
+
+func TestDecoderPropagatesVerifiedUnsupportedTransmission(t *testing.T) {
+	d, _ := New(Config{})
+	p := Parameters{Mode: 3, GuardDenominator: 8}
+	d.p = &p
+	d.layers[0] = &layerDecoder{packets: 5}
+	d.sync.err = ErrUnsupported
+	_, err := d.PushIQ(nil, false)
+	if err != ErrUnsupported {
+		t.Fatalf("unsupported TMCC hidden: %v", err)
+	}
+	if d.Locked() {
+		t.Fatal("unsupported verified transmission retained lock")
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"testing"
+	"time"
 )
 
 func TestRecordedTS(t *testing.T) {
@@ -23,13 +24,16 @@ func TestRecordedTS(t *testing.T) {
 	d, _ := New(Config{})
 	raw := make([]byte, 4*32768)
 	iq := make([]complex64, 32768)
-	var output []byte
+	output := make([]byte, 0, 24<<20)
+	var processing time.Duration
 	for {
 		n, e := io.ReadFull(f, raw)
 		for i := 0; i < n/4; i++ {
 			iq[i] = complex(float32(int16(binary.LittleEndian.Uint16(raw[4*i:])))/32768, float32(int16(binary.LittleEndian.Uint16(raw[4*i+2:])))/32768)
 		}
+		start := time.Now()
 		ts, err := d.PushIQ(iq[:n/4], false)
+		processing += time.Since(start)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -102,7 +106,7 @@ func TestRecordedTS(t *testing.T) {
 	if !d.Locked() {
 		t.Fatal("no validated RS/TS lock")
 	}
-	t.Logf("TS bytes=%d", len(output))
+	t.Logf("TS bytes=%d IQ processing=%s", len(output), processing)
 }
 
 // Reassemble complete sections rather than accepting a PID or sync-byte cadence.

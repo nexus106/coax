@@ -20,8 +20,17 @@ func modulationBits(q int) int {
 // demap uses the axis Gray labels of STD-B31 Figs 3-15,3-17,3-19.
 func demap(dst []byte, src []complex64, q int) []byte {
 	b := modulationBits(q)
+	offset := len(dst)
+	needed := offset + len(src)*b
+	if needed > cap(dst) {
+		grown := make([]byte, needed)
+		copy(grown, dst)
+		dst = grown
+	} else {
+		dst = dst[:needed]
+	}
 	scale := float32(math.Sqrt(float64(q-1) * 2 / 3))
-	for _, c := range src {
+	for index, c := range src {
 		x, y := real(c)*scale, imag(c)*scale
 		var v [6]byte
 		if x < 0 {
@@ -55,7 +64,8 @@ func demap(dst []byte, src []complex64, q int) []byte {
 				}
 			}
 		}
-		dst = append(dst, v[:b]...)
+		base := offset + index*b
+		copy(dst[base:base+b], v[:b])
 	}
 	return dst
 }
