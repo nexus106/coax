@@ -15,6 +15,7 @@ package iokit
 import (
 	"errors"
 	"fmt"
+	"time"
 	"unsafe"
 
 	"github.com/Till0196/coax/pkg/usbio/backend"
@@ -218,6 +219,10 @@ func openIOKit(api *ioKit, service uintptr) (backend.Device, error) {
 		if errors.Is(err, errNoInterface) && configuration != 0 {
 			if result := vtable(deviceInterface, slotDeviceSetConfiguration, 0); result == 0 {
 				if result = vtable(deviceInterface, slotDeviceSetConfiguration, 1); result == 0 {
+					// Interface services are published asynchronously after a
+					// configuration change; do not rebuild it again before
+					// macOS has had a chance to make those services visible.
+					time.Sleep(250 * time.Millisecond)
 					err = opened.claimFirstInterface(open)
 				} else {
 					err = ioKitError("reconfigure the device", uint32(result))
