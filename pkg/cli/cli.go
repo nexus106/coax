@@ -24,8 +24,6 @@ func Run(arguments []string, stdin io.Reader, stdout io.Writer, stderr io.Writer
 		return runScan(arguments[1:], stdout, stderr)
 	case "tune":
 		return runTune(arguments[1:], stdout, stderr)
-	case "decode":
-		return runDecode(arguments[1:], stdin, stdout, stderr)
 	case "export":
 		return runExport(arguments[1:], stdin, stdout, stderr)
 	case "card":
@@ -50,7 +48,6 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  coax scan --discover [options]")
 	fmt.Fprintln(w, "  coax export --format mirakurun --input scan.json [options]")
 	fmt.Fprintln(w, "  coax tune [options]")
-	fmt.Fprintln(w, "  coax decode --input scrambled.ts [--card-reader name] [-o clear.ts]")
 	fmt.Fprintln(w, "  coax card [options] [APDU ...]")
 	fmt.Fprintln(w, "  coax pcsc [options]")
 	fmt.Fprintln(w, "  coax version")

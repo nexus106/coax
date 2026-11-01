@@ -259,5 +259,3 @@ soft.c and gain.c (reference revision 6392af06). COPYING contains GPL v2.
 
 The ISDB-T Go DSP and ARM64 FEC routines are original implementations of
 ARIB STD-B31, not derived from GNU Radio or gr-isdbt.
-The B25 MULTI2 interoperability implementation uses Apache-2.0 libarib25
-arithmetic references; see pkg/b25/LICENSE and pkg/b25/NOTICE for attribution.

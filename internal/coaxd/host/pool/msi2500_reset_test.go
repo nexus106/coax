@@ -4,7 +4,6 @@
 package pool
 
 import (
-	"errors"
 	"sync"
 	"testing"
 
@@ -133,24 +132,6 @@ func TestMSI2500AddressChangesKeepTwoPortsSeparate(t *testing.T) {
 		t.Fatal("removed first device retained lease")
 	}
 	assertLeaseAlive(t, second)
-}
-func TestMSI2500CardSourceUsesCurrentAddress(t *testing.T) {
-	s, r, b := newResetPool(t, Options{Linger: LingerForever})
-	b.card = true
-	l := resetLease(t, s)
-	resetAddress(r, 0, "001:008")
-	borrow, e := s.Cards().Open("msi2500", "001:008")
-	if e != nil {
-		t.Fatal(e)
-	}
-	defer borrow.Release()
-	assertLeaseAlive(t, l)
-	if r.openCount() != 1 {
-		t.Fatal("card lookup opened a second actor")
-	}
-	if _, e = s.Cards().Open("msi2500", "001:007"); !errors.Is(e, ErrUnknownTuner) {
-		t.Fatalf("old selector still accepted: %v", e)
-	}
 }
 func TestMSI2500ConcurrentRefreshAndReopen(t *testing.T) {
 	s, r, _ := newResetPool(t, Options{})

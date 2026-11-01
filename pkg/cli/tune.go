@@ -12,7 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Till0196/coax/pkg/b25"
 	"github.com/Till0196/coax/pkg/host"
 	"github.com/Till0196/coax/pkg/isdb"
 )
@@ -42,8 +41,6 @@ func runTune(arguments []string, stdout, stderr io.Writer) error {
 	output := flags.String("output", "-", "where to write the stream, or - for stdout")
 	withPCSC := flags.Bool("pcsc", false,
 		"also make sure a card socket is being served, for a decoder reading this stream; it stops on its own once nothing is using it")
-	withB25 := flags.Bool("b25", false, "descramble with a local B-CAS card through native PC/SC")
-	cardReader := flags.String("card-reader", "", "native PC/SC reader for --b25")
 	alias(flags, "o", "output")
 	alias(flags, "t", "tuner")
 	alias(flags, "f", "freq")
@@ -51,9 +48,6 @@ func runTune(arguments []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	if *cardReader != "" && !*withB25 {
-		return fmt.Errorf("--card-reader requires --b25")
-	}
 	properties, err := channelProperties(channelRequest{
 		system: *system, channel: *channel, channels: *channels,
 		frequency: *frequency, streamID: *streamID,
@@ -69,15 +63,6 @@ func runTune(arguments []string, stdout, stderr io.Writer) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	var card b25.Card
-	if *withB25 {
-		var err error
-		card, err = b25.OpenCard(ctx, *cardReader)
-		if err != nil {
-			return err
-		}
-		defer card.Close()
-	}
 	client, err := command.dial(ctx)
 	if err != nil {
 		return err
@@ -138,12 +123,6 @@ func runTune(arguments []string, stdout, stderr io.Writer) error {
 		<-ctx.Done()
 		_ = stream.Close()
 	}()
-	if card != nil {
-		if err := b25.Decode(ctx, writer, stream, card); err != nil && ctx.Err() == nil {
-			return err
-		}
-		return nil
-	}
 	if _, err := io.Copy(writer, stream); err != nil && ctx.Err() == nil {
 		return fmt.Errorf("receive the stream: %w", err)
 	}
