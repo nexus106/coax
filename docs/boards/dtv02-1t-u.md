@@ -2,10 +2,22 @@
 
 USB ID `1df7:2500` を `msi2500` バックエンドで扱います。
 別名は `dtv02-1t-u` です。
+保存済みのチューナー ID が変わらないよう、公開バックエンド名は維持しています。
 地上デジタル ISDB-T 用のフロントエンドを1個公開します。
 復調処理は既存の IC 名による配置に合わせて `internal/coaxd/demod/msi2500` に置いています。
 MSi2500 自体は ADC と USB の IC で、ここではその IQ 出力に対応するソフトウェア復調を実装しています。
 USB 制御から復調、誤り訂正まで Go で処理するため、GNU Radio、Python、libmirisdr、CGo は実行時に不要です。
+
+## 実装の配置
+
+既存の USB チューナーと同じく、製品の接続処理と IC ごとの処理を分けています。
+
+| 役割 | 配置 |
+| --- | --- |
+| DTV02-1T-U の接続とフロントエンド | `internal/coaxd/usb/board/dtv021tu` |
+| MSi2500 の USB、ADC、チューナー用バス | `internal/coaxd/usb/bridge/msi2500` |
+| MSi001 の RF 選局と利得 | `internal/coaxd/tuner/msi001` |
+| MSi2500 の IQ 出力に対応するソフトウェア復調 | `internal/coaxd/demod/msi2500` |
 
 ## 使い方
 

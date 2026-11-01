@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/binary"
+	"github.com/Till0196/coax/internal/coaxd/tuner/msi001"
 	"github.com/Till0196/coax/pkg/usbio"
 	"os"
 	"testing"
@@ -31,7 +32,7 @@ func TestHardwareCapture(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer b.Close()
-	if err = b.Tune(539142857, 15); err != nil {
+	if err = msi001.New(b.TunerBus()).Tune(539142857, 15); err != nil {
 		t.Fatal(err)
 	}
 	f, err := os.Create(path)
@@ -98,7 +99,7 @@ func TestHardwareCapture(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer b2.Close()
-	if e = b2.Tune(539142857, 15); e != nil {
+	if e = msi001.New(b2.TunerBus()).Tune(539142857, 15); e != nil {
 		t.Fatal(e)
 	}
 	if e = b2.Start(); e != nil {

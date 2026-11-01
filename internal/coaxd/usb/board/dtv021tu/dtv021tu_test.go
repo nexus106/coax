@@ -1,6 +1,6 @@
 // Copyright 2026 nexus106
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
-package msi2500
+package dtv021tu
 
 import (
 	"context"
@@ -55,7 +55,7 @@ func (p *fakeProcessor) Snapshot() demod.SyncSnapshot {
 
 func TestTuneRejectsUnsupportedBeforeStarting(t *testing.T) {
 	b := &fakeBridge{closed: make(chan struct{})}
-	f := newFrontend(b, func() (processor, error) { return &fakeProcessor{}, nil })
+	f := newFrontend(b, b, func() (processor, error) { return &fakeProcessor{}, nil })
 	if err := f.Tune(map[string]string{"DELIVERY_SYSTEM": "DVBS", "FREQUENCY": "539142857"}); err == nil {
 		t.Fatal("satellite accepted")
 	}
@@ -68,7 +68,7 @@ func TestTuneRejectsUnsupportedBeforeStarting(t *testing.T) {
 }
 func TestTuneRunsBeforeOpenAndReleaseStopsIt(t *testing.T) {
 	b := &fakeBridge{closed: make(chan struct{})}
-	f := newFrontend(b, func() (processor, error) { return &fakeProcessor{}, nil })
+	f := newFrontend(b, b, func() (processor, error) { return &fakeProcessor{}, nil })
 	if err := f.Tune(map[string]string{"DELIVERY_SYSTEM": "ISDBT", "FREQUENCY": "539142857"}); err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestTuneRunsBeforeOpenAndReleaseStopsIt(t *testing.T) {
 func TestTunePropagatesInitializationFailure(t *testing.T) {
 	sentinel := errors.New("device failed")
 	b := &fakeBridge{closed: make(chan struct{}), fail: sentinel}
-	f := newFrontend(b, func() (processor, error) { return &fakeProcessor{}, nil })
+	f := newFrontend(b, b, func() (processor, error) { return &fakeProcessor{}, nil })
 	if err := f.Tune(map[string]string{"DELIVERY_SYSTEM": "ISDBT", "FREQUENCY": "539142857"}); !errors.Is(err, sentinel) {
 		t.Fatalf("got %v", err)
 	}
@@ -131,7 +131,7 @@ func TestLayoutHasOneISDBTFrontendWithoutCard(t *testing.T) {
 
 func TestIdleFrontendCannotStreamAndTunedStreamCanReopen(t *testing.T) {
 	b := &fakeBridge{closed: make(chan struct{})}
-	f := newFrontend(b, func() (processor, error) { return &fakeProcessor{}, nil })
+	f := newFrontend(b, b, func() (processor, error) { return &fakeProcessor{}, nil })
 	if err := f.StartStream(); err == nil {
 		t.Fatal("idle frontend accepted stream")
 	}
@@ -145,7 +145,7 @@ func TestIdleFrontendCannotStreamAndTunedStreamCanReopen(t *testing.T) {
 	}
 }
 func TestStaleStatusClearsLockNames(t *testing.T) {
-	f := newFrontend(nil, nil)
+	f := newFrontend(nil, nil, nil)
 	f.status = device.Status{Locked: true, Names: append([]string(nil), device.LockNames...)}
 	f.lastIQ = time.Now().Add(-2 * time.Second)
 	s, _ := f.Status()

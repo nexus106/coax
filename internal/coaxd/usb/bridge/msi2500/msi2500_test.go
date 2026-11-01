@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Till0196/coax/internal/coaxd/tuner/msi001"
 	"github.com/Till0196/coax/pkg/usbio"
 )
 
@@ -41,7 +42,7 @@ func TestControlAndLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = b.Tune(539142857, 15); err != nil {
+	if err = msi001.New(b.TunerBus()).Tune(539142857, 15); err != nil {
 		t.Fatal(err)
 	}
 	// 15 dB = baseband reduction 44, mixer/LNA disabled; periodic DC mode 2.
@@ -88,7 +89,7 @@ func TestTuneRange(t *testing.T) {
 		f uint32
 		g int
 	}{{0, 15}, {539142857, -1}, {539142857, 86}} {
-		if b.Tune(v.f, v.g) == nil {
+		if msi001.New(b.TunerBus()).Tune(v.f, v.g) == nil {
 			t.Fatal(v)
 		}
 	}
@@ -100,7 +101,7 @@ func TestADCClockConfiguredBeforeTuner(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e = b.Tune(539142857, 15); e != nil {
+	if e = msi001.New(b.TunerBus()).Tune(539142857, 15); e != nil {
 		t.Fatal(e)
 	}
 	clock := false
@@ -131,7 +132,7 @@ func TestReadPreservesErrorAlongsideData(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	b.Tune(539142857, 15)
+	msi001.New(b.TunerBus()).Tune(539142857, 15)
 	b.Start()
 	var dst [336]complex64
 	if n, _, e := b.ReadIQ(context.Background(), dst[:]); n != 336 || e != nil {
@@ -166,7 +167,7 @@ func batchBridge(t *testing.T, r usbio.EndpointReader) *Bridge {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e = b.Tune(539142857, 15); e != nil {
+	if e = msi001.New(b.TunerBus()).Tune(539142857, 15); e != nil {
 		t.Fatal(e)
 	}
 	if e = b.Start(); e != nil {

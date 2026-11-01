@@ -253,9 +253,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 DTV02-1T-U additions
 -------------------
 libmirisdr-5 by Miroslav Slugen (2013) and Peter Hackenberg (2025),
-GPL-2.0-or-later. USB register/PLL/tuner programming in
-internal/coaxd/usb/bridge/msi2500 is adapted from reg.c, adc.c, hard.c,
-soft.c and gain.c (reference revision 6392af06). COPYING contains GPL v2.
+GPL-2.0-or-later. USB/ADC register programming in
+internal/coaxd/usb/bridge/msi2500 and RF PLL/gain programming in
+internal/coaxd/tuner/msi001 are adapted from reg.c, adc.c, hard.c, soft.c
+and gain.c (reference revision 6392af06). COPYING contains GPL v2.
 
 The ISDB-T Go DSP and ARM64 FEC routines are original implementations of
 ARIB STD-B31, not derived from GNU Radio or gr-isdbt.

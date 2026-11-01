@@ -21,7 +21,7 @@ OSごとの設定は[os.md](os.md)にあります。
 
 | バックエンド | 主な対象製品 | ファームウェア | 文書 |
 | --- | --- | --- | --- |
-| `msi2500` | e-better DTV02-1T-U（Go ソフトウェア復調）| 不要 | [msi2500.md](../boards/msi2500.md) |
+| `msi2500` | e-better DTV02-1T-U（Go ソフトウェア復調）| 不要 | [dtv02-1t-u.md](../boards/dtv02-1t-u.md) |
 | `t230` | MyGica T230 / T230C / T230C Lite / T230A / T230C2 / T230C2 Lite | 要 | [t230.md](../boards/t230.md) |
 | `px3` | PLEX PX-S3U / S3U2 / W3U2 / W3U3 / W3U3 V2 | 要 | [px3.md](../boards/px3.md) |
 | `px4`、`pxmlt`、`isdb2056`、`s1ur` | PLEX / DigiBest製 IT930x系チューナー（PX-W3U4、PX-MLT5PE、PX-M1UR、PX-S1URなど）| 要 | [px4.md](../boards/px4.md) |

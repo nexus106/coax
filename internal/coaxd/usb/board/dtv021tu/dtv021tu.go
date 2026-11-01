@@ -1,8 +1,8 @@
 // Copyright 2026 nexus106
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-// Package msi2500 connects the Go software demodulator to the existing tuner host.
-package msi2500
+// Package dtv021tu wires the DTV02-1T-U bridge, tuner and software demodulator.
+package dtv021tu
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 
 	demod "github.com/Till0196/coax/internal/coaxd/demod/msi2500"
 	"github.com/Till0196/coax/internal/coaxd/device"
+	"github.com/Till0196/coax/internal/coaxd/tuner/msi001"
 	"github.com/Till0196/coax/internal/coaxd/tuning"
 	"github.com/Till0196/coax/internal/coaxd/usb/boardkit"
 	bridge "github.com/Till0196/coax/internal/coaxd/usb/bridge/msi2500"
@@ -22,6 +23,8 @@ import (
 
 var ids = []usbio.ID{{Vendor: 0x1df7, Product: 0x2500}}
 var deliveries = []string{"ISDB-T"}
+
+// Backend keeps its established name so saved tuner IDs remain usable.
 var Backend = usbdev.Backend{
 	Name:        "msi2500",
 	Aliases:     []string{"dtv02-1t-u"},
@@ -55,7 +58,7 @@ func open(options device.Options) (device.Board, error) {
 		return nil, err
 	}
 	board, err := boardkit.New(boardkit.Config{Model: "DTV02-1T-U", Location: t.Name(), Tuners: Layout(ids[0]), Release: b.Close, Supports: Supports, Open: func(int) (boardkit.Tuner, error) {
-		return newFrontend(b, func() (processor, error) { return demod.New(demod.Config{}) }), nil
+		return newFrontend(b, msi001.New(b.TunerBus()), func() (processor, error) { return demod.New(demod.Config{}) }), nil
 	}})
 	if err != nil {
 		b.Close()
@@ -63,8 +66,9 @@ func open(options device.Options) (device.Board, error) {
 	return board, err
 }
 
+type rfTuner interface{ Tune(uint32, int) error }
+
 type iqBridge interface {
-	Tune(uint32, int) error
 	Start() error
 	Stop() error
 	ReadIQ(context.Context, []complex64) (int, bool, error)
@@ -83,6 +87,7 @@ type iqBlock struct {
 
 type frontend struct {
 	bridge    iqBridge
+	tuner     rfTuner
 	factory   func() (processor, error)
 	life      sync.Mutex
 	mu        sync.Mutex
@@ -99,8 +104,8 @@ type frontend struct {
 	notify    chan struct{}
 }
 
-func newFrontend(b iqBridge, factory func() (processor, error)) *frontend {
-	return &frontend{bridge: b, factory: factory, gain: 15, notify: make(chan struct{}, 1)}
+func newFrontend(b iqBridge, tuner rfTuner, factory func() (processor, error)) *frontend {
+	return &frontend{bridge: b, tuner: tuner, factory: factory, gain: 15, notify: make(chan struct{}, 1)}
 }
 func (f *frontend) GainLadder(string) tuning.GainLadder { return tuning.NewGainLadder(gainSteps()...) }
 func (f *frontend) SetGain(step int) error {
@@ -136,7 +141,7 @@ func (f *frontend) Tune(properties map[string]string) error {
 	f.mu.Lock()
 	gain := f.gain
 	f.mu.Unlock()
-	if err := f.bridge.Tune(uint32(hz), gain); err != nil {
+	if err := f.tuner.Tune(uint32(hz), gain); err != nil {
 		return err
 	}
 	if err := f.bridge.Start(); err != nil {

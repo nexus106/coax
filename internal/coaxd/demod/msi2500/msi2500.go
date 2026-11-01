@@ -1,6 +1,8 @@
 // Copyright 2026 nexus106
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
+// Package msi2500 implements ISDB-T software demodulation for MSi2500 IQ.
+// References: ARIB STD-B31, chapters 3.11 through 3.15. No GNU Radio code is used.
 package msi2500
 
 import "fmt"
