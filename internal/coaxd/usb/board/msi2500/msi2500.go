@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Till0196/coax/internal/coaxd/demod/isdbt"
+	demod "github.com/Till0196/coax/internal/coaxd/demod/msi2500"
 	"github.com/Till0196/coax/internal/coaxd/device"
 	"github.com/Till0196/coax/internal/coaxd/tuning"
 	"github.com/Till0196/coax/internal/coaxd/usb/boardkit"
@@ -55,7 +55,7 @@ func open(options device.Options) (device.Board, error) {
 		return nil, err
 	}
 	board, err := boardkit.New(boardkit.Config{Model: "DTV02-1T-U", Location: t.Name(), Tuners: Layout(ids[0]), Release: b.Close, Supports: Supports, Open: func(int) (boardkit.Tuner, error) {
-		return newFrontend(b, func() (processor, error) { return isdbt.New(isdbt.Config{}) }), nil
+		return newFrontend(b, func() (processor, error) { return demod.New(demod.Config{}) }), nil
 	}})
 	if err != nil {
 		b.Close()
@@ -72,7 +72,7 @@ type iqBridge interface {
 type processor interface {
 	PushIQ([]complex64, bool) ([]byte, error)
 	Locked() bool
-	Snapshot() isdbt.SyncSnapshot
+	Snapshot() demod.SyncSnapshot
 }
 type iqBlock struct {
 	samples []complex64

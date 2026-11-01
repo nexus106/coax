@@ -1,7 +1,7 @@
 // Copyright 2026 nexus106
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-package isdbt
+package msi2500
 
 import "testing"
 

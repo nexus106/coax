@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Till0196/coax/internal/coaxd/demod/isdbt"
+	demod "github.com/Till0196/coax/internal/coaxd/demod/msi2500"
 	"github.com/Till0196/coax/internal/coaxd/device"
 	"github.com/Till0196/coax/pkg/usbio"
 )
@@ -49,8 +49,8 @@ func (p *fakeProcessor) PushIQ([]complex64, bool) ([]byte, error) {
 	return b, nil
 }
 func (p *fakeProcessor) Locked() bool { return p.n > 0 }
-func (p *fakeProcessor) Snapshot() isdbt.SyncSnapshot {
-	return isdbt.SyncSnapshot{Parameters: &isdbt.Parameters{Mode: 3}}
+func (p *fakeProcessor) Snapshot() demod.SyncSnapshot {
+	return demod.SyncSnapshot{Parameters: &demod.Parameters{Mode: 3}}
 }
 
 func TestTuneRejectsUnsupportedBeforeStarting(t *testing.T) {

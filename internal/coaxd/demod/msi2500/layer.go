@@ -1,9 +1,9 @@
 // Copyright 2026 nexus106
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-package isdbt
+package msi2500
 
-import "github.com/Till0196/coax/internal/coaxd/demod/isdbt/fec"
+import "github.com/Till0196/coax/internal/coaxd/demod/msi2500/fec"
 
 type layerDecoder struct {
 	p                                    LayerParameters

@@ -1,7 +1,7 @@
 // Copyright 2026 nexus106
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-package isdbt
+package msi2500
 
 // frequencyPermutation maps each pre-interleaver carrier to its received index.
 // STD-B31 3.11.2: transpose segments, rotate left by segment number, then

@@ -1,7 +1,7 @@
 // Copyright 2026 nexus106
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-package isdbt
+package msi2500
 
 // STD-B31 Fig3-23 uses delay I*((5*i)mod96); complementary delays
 // recover all carriers at the same time with maximum delay 95*I.
