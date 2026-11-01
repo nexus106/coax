@@ -47,6 +47,8 @@ coaxが個別に対応しているUSBチューナーは、放送用のドライ�
 | PCIe接続のチューナー | Earthsoft PT3、PLEX PX-W3PE5、PX-MLT5PE、Digital Devices Max M4やPT4K(TBS6812)、その他TBSのPCIeカード | Linuxはpx4_drvやLinux DVB、Windowsは直接USBか、`coaxd`がカードを直接制御する経路 |
 | coaxが対応していないチューナー | Linux DVBかBDAのドライバーがあるもの（一部の機能は使えません）| Linuxは`dvb`、Windowsは`bda` |
 
+DTV02-1T-U は Go によるソフトウェア復調で対応します（[使い方と検証範囲](docs/boards/dtv02-1t-u.md)）。
+
 対応表と例外は[backends.md](docs/setup/backends.md)にあります。
 
 ### チャンネル選局とストリーム

@@ -15,6 +15,7 @@ package iokit
 import (
 	"errors"
 	"fmt"
+	"time"
 	"unsafe"
 
 	"github.com/Till0196/coax/pkg/usbio/backend"
@@ -212,8 +213,28 @@ func openIOKit(api *ioKit, service uintptr) (backend.Device, error) {
 	}
 
 	if err := opened.claimFirstInterface(open); err != nil {
-		opened.Close()
-		return nil, err
+		// Firmware resets can leave the device configured but with no interface
+		// services published. No interface is claimed here; rebuild configuration
+		// to let macOS publish fresh services before retrying the claim.
+		if errors.Is(err, errNoInterface) && configuration != 0 {
+			if result := vtable(deviceInterface, slotDeviceSetConfiguration, 0); result == 0 {
+				if result = vtable(deviceInterface, slotDeviceSetConfiguration, 1); result == 0 {
+					// Interface services are published asynchronously after a
+					// configuration change; do not rebuild it again before
+					// macOS has had a chance to make those services visible.
+					time.Sleep(250 * time.Millisecond)
+					err = opened.claimFirstInterface(open)
+				} else {
+					err = ioKitError("reconfigure the device", uint32(result))
+				}
+			} else {
+				err = ioKitError("unconfigure the device", uint32(result))
+			}
+		}
+		if err != nil {
+			opened.Close()
+			return nil, err
+		}
 	}
 	return opened, nil
 }
@@ -239,6 +260,8 @@ func openControlOnlyIOKit(api *ioKit, service uintptr) (backend.Device, error) {
 	return opened, nil
 }
 
+var errNoInterface = errors.New("this device has no interface to claim")
+
 // claimFirstInterface opens interface zero and learns its pipes.
 func (opened *iokitDevice) claimFirstInterface(open *ioKitOpen) error {
 	// The search is for anything: these boards have one interface, the wanted one.
@@ -255,7 +278,7 @@ func (opened *iokitDevice) claimFirstInterface(open *ioKitOpen) error {
 
 	service := call(opened.api.iteratorNext, iterator)
 	if service == 0 {
-		return errors.New("this device has no interface to claim")
+		return errNoInterface
 	}
 	defer call(opened.api.objectRelease, service)
 

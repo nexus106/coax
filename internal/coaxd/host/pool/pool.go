@@ -160,6 +160,17 @@ type Supervisor struct {
 type Key struct {
 	Backend  string
 	Selector string
+	// MSi2500 resets firmware during open, changing its USB address. Only that
+	// backend uses a physical-port/product identity instead of the open selector.
+	Port string
+	USB  usbio.ID
+}
+
+func keyOf(one Detected) Key {
+	if one.Backend == "msi2500" && one.Port != "" {
+		return Key{Backend: one.Backend, Port: one.Port, USB: one.USB}
+	}
+	return Key{Backend: one.Backend, Selector: one.Selector}
 }
 
 // entry is one attached board as the last listing saw it.
@@ -231,7 +242,7 @@ func (s *Supervisor) refresh() ([]entry, error) {
 	for _, one := range detected {
 		one.Deliveries = tuning.ExpandDeliveries(one.Deliveries)
 		one.Tuners = expandTuners(one.Tuners)
-		key := Key{Backend: one.Backend, Selector: one.Selector}
+		key := keyOf(one)
 		attached[key] = true
 		name, kind := tunerid.Board(deviceOf(one))
 		catalog = append(catalog, entry{
@@ -245,9 +256,37 @@ func (s *Supervisor) refresh() ([]entry, error) {
 
 	s.mutex.Lock()
 	s.catalog = catalog
+	// Lock ordering is supervisor then board, as in board() below. Board open
+	// snapshots the detection before dropping its lock and never holds that lock
+	// while calling the registry or tracking a lease with the supervisor.
+	for _, one := range catalog {
+		if held := s.boards[one.key]; held != nil {
+			held.mutex.Lock()
+			held.detected = one.detected
+			held.mutex.Unlock()
+		}
+	}
 	var orphaned []*board
 	for key, held := range s.boards {
 		if !attached[key] {
+			// An MSi2500 open resets and re-enumerates the device itself. Its
+			// bounded backend open decides failure during that temporary absence;
+			// once open completes, a missing device must expire normally.
+			if key.Backend == "msi2500" && key.Port != "" {
+				held.mutex.Lock()
+				opening := held.opening
+				held.mutex.Unlock()
+				replaced := false
+				for _, one := range catalog {
+					if one.detected.Port == key.Port && one.detected.USB != key.USB {
+						replaced = true
+						break
+					}
+				}
+				if opening && !replaced {
+					continue
+				}
+			}
 			delete(s.boards, key)
 			orphaned = append(orphaned, held)
 		}
@@ -292,6 +331,12 @@ func (s *Supervisor) board(one entry) (*board, error) {
 			return held, nil
 		}
 		delete(s.boards, one.key)
+	}
+	for _, current := range s.catalog {
+		if current.key == one.key {
+			one = current
+			break
+		}
 	}
 	created := newBoard(s, one)
 	s.boards[one.key] = created

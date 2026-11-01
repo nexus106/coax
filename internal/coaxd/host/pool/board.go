@@ -28,6 +28,9 @@ type board struct {
 
 	mutex sync.Mutex
 	ready *sync.Cond
+	// detected holds the latest open selector, guarded by mutex. entry remains
+	// immutable so existing leases retain their stable name and identity.
+	detected Detected
 
 	opening bool
 	opened  device.Board
@@ -59,6 +62,7 @@ func newBoard(pool *Supervisor, one entry) *board {
 	created := &board{
 		pool:     pool,
 		entry:    one,
+		detected: one.detected,
 		leases:   make(map[int]*Lease),
 		handover: make(map[int]chan struct{}),
 	}
@@ -86,10 +90,11 @@ func (b *board) acquire() error {
 			continue
 		}
 		b.opening = true
+		detected := b.detected
 		b.mutex.Unlock()
 
-		opened, err := b.pool.registry.Open(b.entry.detected, device.Options{
-			Selector:    b.entry.key.Selector,
+		opened, err := b.pool.registry.Open(detected, device.Options{
+			Selector:    detected.Selector,
 			FirmwareDir: b.pool.options.FirmwareDir,
 		})
 
@@ -101,7 +106,7 @@ func (b *board) acquire() error {
 				b.gone = true
 				return ErrGone
 			}
-			return fmt.Errorf("open %s on %s: %w", b.entry.key.Backend, b.entry.key.Selector, err)
+			return fmt.Errorf("open %s on %s: %w", b.entry.key.Backend, detected.Selector, err)
 		}
 		// Closing while this open was in flight leaves nothing to hand back.
 		if b.gone {
