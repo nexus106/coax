@@ -74,3 +74,61 @@ func TestRecordedIQ(t *testing.T) {
 	}
 	t.Logf("parameters=%+v", *snap.Parameters)
 }
+
+// Local recordings are optional and are never distributed with the source.
+// Check packet continuity after pipeline fill, independently of B25 or video.
+func TestRecordedSamplingClockContinuity(t *testing.T) {
+	name := os.Getenv("COAX_CLOCK_IQ")
+	if name == "" {
+		t.Skip("set COAX_CLOCK_IQ to a local signed16 IQ recording")
+	}
+	input, err := os.Open(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer input.Close()
+	d, _ := New(Config{})
+	raw := make([]byte, 4*32768)
+	samples := make([]complex64, 32768)
+	last := make(map[int]byte)
+	packets, failures, total := 0, 0, 0
+	for {
+		n, err := io.ReadFull(input, raw)
+		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+			t.Fatal(err)
+		}
+		for i := 0; i < n/4; i++ {
+			samples[i] = complex(float32(int16(binary.LittleEndian.Uint16(raw[4*i:])))/32768, float32(int16(binary.LittleEndian.Uint16(raw[4*i+2:])))/32768)
+		}
+		ts, e := d.PushIQ(samples[:n/4], false)
+		if e != nil {
+			t.Fatal(e)
+		}
+		total += n / 4
+		if total > 8126984*2 {
+			for i := 0; i+188 <= len(ts); i += 188 {
+				p := ts[i : i+188]
+				pid := int(p[1]&31)<<8 | int(p[2])
+				cc := p[3] & 15
+				if pid == 8191 || p[3]&16 == 0 {
+					continue
+				}
+				if p[3]&32 != 0 && p[4] > 0 && p[5]&128 != 0 {
+					delete(last, pid)
+				}
+				if prev, ok := last[pid]; ok && cc != (prev+1)%16 {
+					failures++
+				}
+				last[pid] = cc
+				packets++
+			}
+		}
+		if err != nil {
+			break
+		}
+	}
+	t.Logf("packets=%d continuity_errors=%d snapshot=%+v", packets, failures, d.Snapshot())
+	if packets < 10000 || failures > 10 {
+		t.Fatalf("sustained transport corruption: %d errors / %d packets", failures, packets)
+	}
+}

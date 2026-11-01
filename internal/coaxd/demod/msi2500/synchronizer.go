@@ -31,6 +31,7 @@ type Synchronizer struct {
 	n, cp, period, prefix, index, frameIndex int
 	mode, guard                              int
 	offset                                   float64
+	clock                                    samplingClock
 	plan                                     *fft
 	spectrum, channel, active, data          []complex64
 	pilots                                   []float32
@@ -58,6 +59,7 @@ func (s *Synchronizer) Reset() {
 	s.buffer = s.buffer[:0]
 	s.acquired = false
 	s.total = 0
+	s.clock = samplingClock{}
 	s.historyAt = 0
 	s.historyCount = 0
 	s.frameIndex = -1
@@ -123,6 +125,7 @@ func (s *Synchronizer) PushIQ(x []complex64, discontinuity bool, emit func(Symbo
 			return
 		}
 		s.prefix = pos
+		s.clock.observe(s.total+int64(pos), s.period)
 		currentFraction := s.offset - math.Round(s.offset)
 		difference := cfo - currentFraction
 		difference -= math.Round(difference)
@@ -207,13 +210,17 @@ func trackPrefix(x []complex64, predicted, n, cp int) (int, float64, float64) {
 	return pos, math.Atan2(imag(cross), real(cross)) / (2 * math.Pi), coherence
 }
 func (s *Synchronizer) transform(start int) {
-	phase := -2 * math.Pi * s.offset * float64(s.total+int64(start)) / float64(s.n)
+	phase := -2 * math.Pi * s.offset * (float64(s.total+int64(start)) - float64(s.n)*.5*s.clock.rate) / float64(s.n)
 	sn, cs := math.Sincos(math.Remainder(phase, 2*math.Pi))
 	rotation := complex(float32(cs), float32(sn))
-	sn, cs = math.Sincos(-2 * math.Pi * s.offset / float64(s.n))
+	sn, cs = math.Sincos(-2 * math.Pi * s.offset * (1 + s.clock.rate) / float64(s.n))
 	step := complex(float32(cs), float32(sn))
 	for i := 0; i < s.n; i++ {
-		s.spectrum[i] = s.buffer[start+i] * rotation
+		sample := s.buffer[start+i]
+		if s.clock.rate != 0 {
+			sample = fractionalSample(s.buffer, float64(start+i)+(float64(i)-float64(s.n)*.5)*s.clock.rate)
+		}
+		s.spectrum[i] = sample * rotation
 		rotation *= step
 		if i&1023 == 1023 {
 			mag := float32(math.Hypot(float64(real(rotation)), float64(imag(rotation))))
